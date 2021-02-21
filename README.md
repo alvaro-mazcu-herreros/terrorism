@@ -1,5 +1,5 @@
-# terrorism
-Dashboard sobre el terrorismo
+# Dashboard sobre el terrorismo
+
 
 Proyecto realizado por:
 - Miquel Marín Colomé (https://www.linkedin.com/in/miquel-marin-colome/).
