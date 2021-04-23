@@ -1,0 +1,450 @@
+---
+title: "Terrorism Dashboard"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    navbar:
+        - { class: "alvaro", icon: "fa-linkedin", href: "https://www.linkedin.com/in/alvaro-mazcu-herreros/", align: right}
+        - { class: "miquel", icon: "fa-linkedin", href: "https://www.linkedin.com/in/miquel-marin-colome/", align: right}
+    vertical_layout: fill
+    includes:
+        in_header: "./data/favicon.html" 
+  runtime: shiny-prerendered
+      
+---
+
+<style>
+
+.toolbar {
+  visibility: hidden;
+}
+.navbar {
+  background-color:#AB0E1D;
+  border-color:black;
+  color:white;
+}
+.navbar-brand {
+color:white!important;
+}
+
+.navbar-nav {
+  background-color:#AB0E1D;
+  border-color:black;
+}
+
+.navbar-nav li a:hover, .navbar-nav > .active > a {
+color: white !important;
+
+background-color:#373737 !important;
+}
+
+.chart-title{
+  background-color:#373737;
+  border-color:#373737;
+  color:white;
+}
+
+.chart-stage.chart-stage-flex{
+  background-color:#373737;
+  border-color:#373737;
+}
+
+.section.level3.chart-wrapper.chart-wrapper-flex{
+  border-color:#373737;
+}
+
+ul.nav.nav-tabs{
+  background-color:#373737;
+  border-color:#373737;
+}
+
+.nav.nav-tabs{
+  background-color:#373737;
+  border-color:#373737;
+}
+
+.nav.navbar-nav.navbar-right li a[href$='https://www.linkedin.com/in/alvaro-mazcu-herreros/'] span::before{
+  content: "Álvaro Mazcuñán";
+}
+
+.nav.navbar-nav.navbar-right li a[href$='https://www.linkedin.com/in/miquel-marin-colome/'] span::before{
+  content: "Miquel Marín";
+}
+
+.section.sidebar {
+  background-color:#373737;
+  color:white;
+}
+
+body{
+  background-color:#373737;
+}
+
+
+</style>
+
+
+```{r setup, include=FALSE}
+setwd(system('pwd', intern = T))
+library(flexdashboard)
+library(ggplot2)
+library(plotly)
+library(dplyr)
+library(shiny)
+library(stringr)
+library(jsonlite)
+library(knitr)
+```
+
+```{r, context="data", include=FALSE}
+Sys.setenv("MAPBOX_TOKEN" = 'pk.eyJ1IjoibWF6Y3UiLCJhIjoiY2tpaWlkN29zMDFqaDJ5cWw0Znd4MXJrbyJ9.aHwHbfssypluXdQi1QDRMg') # for Orca
+data_1 = read.csv("./data/df.csv")
+data_ = read.csv("./data/terrorism.csv")
+df_bar = read.csv("./data/df_attacktype.csv")
+por_anyo_costes = read.csv("./data/por_anyo_costes.csv")
+por_anyo_total = read.csv("./data/por_anyo_total.csv")
+
+geojson <- readLines("./data/countries.geo.json", warn = FALSE) %>%
+  paste(collapse = "\n") %>%
+  fromJSON(simplifyVector = FALSE)
+
+lista = c('Assassination', 'Armed assault', 'Bombing/explosion', 'Hijacking', 'Hostage taking (barricade incident)', 'Hostage taking (kidnapping)', 'Facility/infraestructure attack', 'Unarmed assault', 'Unknown')
+```
+
+
+Terrorism deaths per country
+========================================
+
+### Terrorism deaths per country
+
+
+```{r, context="server-start"}
+fig <- plot_ly()
+fig <- fig %>% add_trace(
+  type = "choroplethmapbox",
+  geojson = geojson,
+  locations = data_1$code,
+  z=data_1$nkill,
+  colorscale="YlOrRd",
+  reversescale = T,
+  zmin=0,
+  zmax=10000,
+  marker=list(line = list(
+    width = 0),
+    opacity=0.5
+  )
+)
+fig <- fig %>% layout(
+  mapbox = list(
+    style = "dark",
+    zoom =3,
+    center = list(lon = 0, lat = 0))
+)
+
+fig <- fig %>% layout(paper_bgcolor='rgb(25,26,26)')  %>% 
+          layout(plot_bgcolor='rgb(25,25,26)')
+fig <- fig %>%
+  config(mapboxAccessToken = Sys.getenv("MAPBOX_TOKEN"))
+
+fig
+
+```
+
+
+Terrorism attacks map
+========================================
+
+### Terrorism attacks map
+
+```{r,context="server-start"}
+
+
+vector = c(1970:2017)
+
+
+fig <- data_
+fig <- fig %>%
+  plot_ly(
+    lat = ~latitude,
+    lon = ~longitude,
+    marker = list(color = "#F5CA0F"),
+    type = 'scattermapbox',
+    text = ~paste('Country: ', country_txt, '<br>Site: ', city, '<br>Deaths: ', nkill, '<br>Wounds: ', nwound, '<br>Date: ', paste(iday, imonth, iyear, sep = '/')),
+    hoverinfo = "text", size = I(5))
+fig <- fig %>%
+  layout(
+    mapbox = list(
+      style = 'dark',
+      zoom =1.5,
+      center = list(lon = 0, lat = 0)))
+
+fig <- fig %>% layout(paper_bgcolor='rgb(25,26,26)')  %>% 
+          layout(plot_bgcolor='rgb(25,25,26)') %>% config(displayModeBar = FALSE)
+fig <- fig %>%
+  config(mapboxAccessToken = Sys.getenv("MAPBOX_TOKEN"))
+
+fig
+
+```
+
+
+
+General graphics
+=====================================
+Inputs {.sidebar}
+------------------------------------
+
+```{r}
+
+
+selectInput('Tipo', label = 'Select attack type: ', choices = lista, selected = '1')
+
+```
+
+Column
+-------------------------------------
+
+### Attack type map
+
+```{r}
+
+
+renderPlotly({
+pos = match(input$Tipo, lista)
+fig <- subset(data_, data_$attacktype1 == as.character(pos))
+fig <- fig %>%
+  plot_ly(
+    lat = ~latitude,
+    lon = ~longitude,
+    marker = list(color = "#F5CA0F"),
+    type = 'scattermapbox',
+    text = ~paste('Site: ', city, '<br>Deaths: ', nkill, '<br>Wounds: ', nwound, '<br>Date: ', paste(iday, imonth, iyear, sep = '/')),
+    hoverinfo = "text", size = I(5))
+fig <- fig %>%
+  layout(
+    mapbox = list(
+      style = 'dark',
+      zoom =1.5,
+      center = list(lon = 0, lat = 0)))
+
+fig <- fig %>% layout(paper_bgcolor='rgb(25,26,26)')  %>% 
+          layout(plot_bgcolor='rgb(25,25,26)') %>% config(displayModeBar = FALSE)
+fig <- fig %>%
+  config(mapboxAccessToken = Sys.getenv("MAPBOX_TOKEN"))
+
+fig
+})
+```
+
+
+Column
+-------------------------------------
+
+### Most popular attacks per year
+
+```{r, context="server"}
+
+t <- list(
+  family = "helvetica",
+  size = 12,
+  color = 'white')
+
+plot_ly(por_anyo_total, x=~as.numeric(as.character(nattack)), y=~attacktype1, frame = ~iyear, color = I('#FA7214'), showlegend = F, text = ~paste0(attacktype1, ': ',as.numeric(as.character(nattack))), hoverinfo = 'skip', textposition = 'outside', outsidetextfont = list(size=12, color = 'rgb(255,255,255)')) %>% animation_opts(frame = 800, redraw = F, transition = 800) %>% animation_slider(currentvalue = list(prefix = "YEAR ", font = list(color="white"))) %>% layout(paper_bgcolor='rgb(55,55,55)')  %>% 
+          layout(plot_bgcolor='rgb(55,55,55)') %>% config(displayModeBar = FALSE) %>% layout(
+    title = "",
+    font = t,
+    yaxis = list(visible = F),
+    xaxis = list(title = ''))
+
+```
+
+### Number of attacks by economical impact
+
+```{r, context="server"}
+plot_ly(por_anyo_costes, x=~as.numeric(as.character(nattack)), y=~costes, frame = ~iyear, color = I('#F53920'), showlegend = F, text = ~paste0(costes, ': ',as.numeric(as.character(nattack))), hoverinfo = 'skip', textposition = 'outside', outsidetextfont = list(size=12, color = 'rgb(255,255,255)')) %>% animation_opts(frame = 800, redraw = F, transition = 800) %>% animation_slider(currentvalue = list(prefix = "YEAR ", font = list(color="white"))) %>% layout(paper_bgcolor='rgb(55,55,55)')  %>% 
+          layout(plot_bgcolor='rgb(55,55,55)') %>% config(displayModeBar = FALSE) %>% layout(
+    title = "",
+    font = t,
+    yaxis = list(visible = F),
+    xaxis = list(title = ''))
+```
+
+
+
+Per country
+=====================================
+
+Inputs {.sidebar}
+------------------------------------
+
+```{r}
+
+selectInput('Country', label = 'Select a country: ', choices = str_sort(unique(data_$country_txt)), selected = 'Spain')
+```
+
+
+Column {data-width=750}
+-------------------------------------
+
+### Attacks map
+
+```{r}
+
+renderPlotly({
+fig <- subset(data_, data_$country_txt == input$Country)
+fig <- fig %>%
+  plot_ly(
+    lat = ~latitude,
+    lon = ~longitude,
+    marker = list(color = "#F5CA0F"),
+    type = 'scattermapbox',
+    text = ~paste('Site: ', city, '<br>Deaths: ', nkill, '<br>Wounds: ', nwound, '<br>Date: ', paste(iday, imonth, iyear, sep = '/')),
+    hoverinfo = "text", size = I(5))
+fig <- fig %>%
+  layout(
+    mapbox = list(
+      style = 'dark',
+      zoom =4.15,
+      center = list(lon = ~mean(longitude), lat = ~mean(latitude))))
+
+fig <- fig %>% layout(paper_bgcolor='rgb(25,26,26)')  %>% 
+          layout(plot_bgcolor='rgb(25,25,26)') %>% config(displayModeBar = FALSE)
+fig <- fig %>%
+  config(mapboxAccessToken = Sys.getenv("MAPBOX_TOKEN"))
+
+fig
+})
+```
+
+Column {data-width=250}
+-------------------------------------
+
+### Total deaths
+
+```{r}
+renderValueBox({
+  valueBox(sum(as.numeric(as.character(subset(df_bar, df_bar$country_txt == input$Country)$nkill))), icon = "fas fa-skull", color = '#C23734')
+})
+
+```
+
+### Total wounds
+
+```{r}
+renderValueBox({
+  valueBox(sum(as.numeric(as.character(subset(df_bar, df_bar$country_txt == input$Country)$nwound))), icon = "fas fa-ambulance", color = '#F5980E')
+})
+```
+
+
+Row {data-height=450}
+-------------------------------------
+
+### Deaths evolution
+
+```{r}
+
+renderPlotly({
+
+t <- list(
+  family = "helvetica",
+  size = 12,
+  color = 'white')
+
+prueba <- data.frame(matrix(ncol = 3, nrow = 0))
+colnames(prueba) = c('iyear', 'nkill', 'nwound')
+
+iter = 1
+esp = subset(df_bar, df_bar$country_txt == input$Country)
+for (i in vector){
+  dat = subset(esp, esp$iyear == i)
+  num_kill = sum(as.numeric(as.character(dat$nkill)))
+  num_her = sum(as.numeric(as.character(dat$nwound)))
+  prueba[iter,] = c(i, num_kill, num_her)
+  iter = iter + 1
+}
+
+plot_ly(prueba, x=~iyear, y=~as.numeric(as.character(nkill)), color = I('#C23734'), text = ~paste('Year: ', iyear, '<br>Deaths: ', as.numeric(as.character(nkill))),
+    hoverinfo = "text") %>% add_lines() %>% layout(paper_bgcolor='rgb(55,55,55)')  %>% 
+          layout(plot_bgcolor='rgb(55,55,55)') %>% config(displayModeBar = FALSE) %>% layout(
+    title = "",
+    font = t,
+    yaxis = list(title = ''),
+    xaxis = list(title = 'Año'))
+})
+
+```
+
+### Attack type deaths
+
+```{r}
+
+renderPlotly({
+t <- list(
+  family = "helvetica",
+  size = 12,
+  color = 'white')
+dat = subset(df_bar, df_bar$country_txt == input$Country)
+
+plot_ly(dat, x=~as.numeric(as.character(nkill)), y=~attacktype1, frame = ~iyear, color = I('#C23734'), showlegend = F, text = ~paste0(attacktype1, ': ',as.numeric(as.character(nkill))), hoverinfo = 'skip', textposition = 'outside', outsidetextfont = list(size=12, color = 'rgb(255,255,255)')) %>% animation_opts(frame = 800, redraw = F, transition = 800) %>% animation_slider(currentvalue = list(prefix = "YEAR ", font = list(color="white"))) %>% layout(paper_bgcolor='rgb(55,55,55)')  %>% 
+          layout(plot_bgcolor='rgb(55,55,55)') %>% config(displayModeBar = FALSE) %>% layout(
+    title = "",
+    font = t,
+    yaxis = list(visible = F),
+    xaxis = list(title = ''))
+})
+```
+
+### Wounds evolution
+
+```{r}
+renderPlotly({
+
+prueba <- data.frame(matrix(ncol = 3, nrow = 0))
+colnames(prueba) = c('iyear', 'nkill', 'nwound')
+t <- list(
+  family = "helvetica",
+  size = 12,
+  color = 'white')
+
+iter = 1
+esp = subset(df_bar, df_bar$country_txt == input$Country)
+for (i in vector){
+  dat = subset(esp, esp$iyear == i)
+  num_kill = sum(as.numeric(as.character(dat$nkill)))
+  num_her = sum(as.numeric(as.character(dat$nwound)))
+  prueba[iter,] = c(i, num_kill, num_her)
+  iter = iter + 1
+}
+plot_ly(prueba, x=~iyear, y=~as.numeric(as.character(nwound)), color = I('#F5980E'), text = ~paste('Year: ', iyear, '<br>Wounds: ', as.numeric(as.character(nwound))),
+    hoverinfo = "text") %>% add_lines() %>% layout(paper_bgcolor='rgb(55,55,55)')  %>% 
+          layout(plot_bgcolor='rgb(55,55,55)') %>% config(displayModeBar = FALSE) %>% layout(
+    title = "",
+    font = t,
+    yaxis = list(title = ''),
+    xaxis = list(title = 'Año'))
+})
+```
+
+
+### Attack type wounds
+
+```{r}
+
+renderPlotly({
+t <- list(
+  family = "helvetica",
+  size = 12,
+  color = 'white')
+
+dat = subset(df_bar, df_bar$country_txt == input$Country)
+
+plot_ly(dat, x=~as.numeric(as.character(nwound)), y=~attacktype1, frame = ~iyear, color = I('#F5980E'), showlegend = F, text = ~paste0(attacktype1, ': ',as.numeric(as.character(nwound))) , textposition = 'outside', hoverinfo = 'skip', outsidetextfont = list(size=12, color = 'rgb(255,255,255)')) %>% animation_opts(frame = 800, redraw = F, transition = 800) %>% animation_slider(currentvalue = list(prefix = "YEAR ", font = list(color="white"))) %>% layout(paper_bgcolor='rgb(55,55,55)')  %>% 
+          layout(plot_bgcolor='rgb(55,55,55)') %>% config(displayModeBar = FALSE) %>% layout(
+    title = "",
+    font = t,
+    yaxis = list(visible = F),
+    xaxis = list(title = ''))
+})
+```
+
